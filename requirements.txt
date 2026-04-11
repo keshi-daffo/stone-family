@@ -18,6 +18,11 @@ Pillow>=10.3.0
 chromadb>=1.0.0
 pinecone>=3.2.0
 
+# ── OpenTelemetry (force new-style protobuf pb2 files, overrides stale base image)
+opentelemetry-api>=1.25.0
+opentelemetry-sdk>=1.25.0
+opentelemetry-exporter-otlp-proto-grpc>=1.25.0
+
 # ── Utilities ──────────────────────────────────────────────────────────────
 numpy>=1.26.0
 tqdm>=4.66.0
