@@ -84,13 +84,12 @@ def collect_images(root: Path):
 
 def build_metadata(path: Path, root: Path):
     rel = path.relative_to(root)
-    stat = path.stat()
 
     return {
-        "file_name": path.name,
-        "folder": path.parent.name,
+        "file_path"    : str(path),
+        "file_name"    : path.name,
+        "class"        : path.parent.name,
         "relative_path": str(rel),
-        "size": stat.st_size,
     }
 
 # ── MAIN ───────────────────────────────────────────────

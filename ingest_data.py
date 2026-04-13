@@ -14,9 +14,8 @@ that main.py's /search endpoint queries. It:
 
 The metadata stored per image is:
   - file_path     : absolute path on disk
-  - filename      : bare filename (e.g. "cat.jpg")
-  - folder_name   : immediate parent directory name — used by the API's
-                    filter_folder query parameter
+  - file_name     : bare filename (e.g. "cat.jpg")
+  - class         : immediate parent directory name (the image category)
   - relative_path : path relative to the scanned root directory
 
 Usage:
@@ -253,10 +252,8 @@ def main() -> None:
                 ids.append(id_)
                 metadatas.append({
                     "file_path"    : str(path),
-                    "filename"     : path.name,
-                    # folder_name is what the /search?filter_folder= parameter
-                    # matches against — it's the immediate parent directory.
-                    "folder_name"  : path.parent.name,
+                    "file_name"    : path.name,
+                    "class"        : path.parent.name,
                     "relative_path": str(path.relative_to(images_dir)),
                 })
             except (UnidentifiedImageError, Exception) as exc:

@@ -95,10 +95,25 @@ with st.sidebar:
     include_metadata = st.toggle("Include metadata", value=True)
     filter_folder    = st.text_input("Filter by folder", placeholder="e.g. products")
 
+    st.divider()
+    st.header("Danger Zone")
+    flush_confirmed = st.checkbox("Confirm — this deletes ALL vectors", key="flush_confirm")
+    if st.button("Flush Vector DB", type="primary", disabled=not flush_confirmed,
+                 use_container_width=True):
+        chroma_client, _ = load_chroma()
+        chroma_client.delete_collection(CHROMA_COLLECTION)
+        chroma_client.get_or_create_collection(
+            name=CHROMA_COLLECTION,
+            metadata={"hnsw:space": "cosine"},
+        )
+        load_chroma.clear()
+        st.success("Vector DB flushed.")
+        st.rerun()
+
 
 # ── Tabs ────────────────────────────────────────────────────────────────────────
 
-tab_search, tab_ingest = st.tabs(["Search", "Ingest"])
+tab_search, tab_ingest, tab_upload = st.tabs(["Search", "Ingest", "Upload & Embed"])
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -140,7 +155,7 @@ with tab_search:
                             include=includes,
                         )
                         if filter_folder.strip():
-                            query_kwargs["where"] = {"folder_name": filter_folder.strip()}
+                            query_kwargs["where"] = {"class": filter_folder.strip()}
 
                         results   = col.query(**query_kwargs)
 
@@ -262,8 +277,8 @@ with tab_ingest:
                                 ids.append(id_)
                                 metadatas.append({
                                     "file_path"    : str(path),
-                                    "filename"     : path.name,
-                                    "folder_name"  : path.parent.name,
+                                    "file_name"    : path.name,
+                                    "class"        : path.parent.name,
                                     "relative_path": str(path.relative_to(root)),
                                 })
                             except (UnidentifiedImageError, Exception):
@@ -296,3 +311,77 @@ with tab_ingest:
 
                     # Bust the cached collection count in sidebar
                     st.rerun()
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# UPLOAD & EMBED TAB
+# ════════════════════════════════════════════════════════════════════════════════
+
+with tab_upload:
+    st.subheader("Upload images and embed directly into ChromaDB")
+
+    upload_class = st.text_input(
+        "Class label (folder / category name)",
+        placeholder="e.g. granite, marble, sandstone",
+        help="Stored as the 'class' metadata field for every uploaded image.",
+    )
+
+    uploaded_files = st.file_uploader(
+        "Drop images here or click to browse",
+        type=["jpg", "jpeg", "png", "webp", "bmp"],
+        accept_multiple_files=True,
+        key="upload_embed_files",
+    )
+
+    if uploaded_files:
+        # Thumbnail preview grid (4 columns)
+        st.caption(f"{len(uploaded_files)} file(s) selected")
+        preview_cols = st.columns(4)
+        for i, f in enumerate(uploaded_files):
+            preview_cols[i % 4].image(f, caption=f.name, use_container_width=True)
+
+        st.divider()
+        embed_clicked = st.button(
+            "Embed & Save →", type="primary",
+            disabled=not upload_class.strip(),
+            help="Enter a class label above before embedding.",
+        )
+
+        if embed_clicked:
+            _, upload_col = load_chroma()
+            load_model()   # warm up model before the loop
+
+            prog       = st.progress(0, text="Starting…")
+            n          = len(uploaded_files)
+            saved      = 0
+            errs       = 0
+
+            for i, f in enumerate(uploaded_files):
+                try:
+                    image  = Image.open(io.BytesIO(f.read())).convert("RGB")
+                    vector = embed_image(image)
+                    id_    = sha1(f"{upload_class.strip()}/{f.name}".encode()).hexdigest()
+                    upload_col.upsert(
+                        ids        = [id_],
+                        embeddings = [vector],
+                        metadatas  = [{
+                            "file_path"    : f.name,
+                            "file_name"    : f.name,
+                            "class"        : upload_class.strip(),
+                            "relative_path": f"{upload_class.strip()}/{f.name}",
+                        }],
+                    )
+                    saved += 1
+                except Exception as exc:
+                    st.warning(f"Failed to embed `{f.name}`: {exc}")
+                    errs += 1
+
+                prog.progress((i + 1) / n, text=f"Embedding… {i + 1} / {n}")
+
+            prog.progress(1.0, text="Done")
+            if errs:
+                st.warning(f"Completed — {saved} saved, {errs} failed.")
+            else:
+                st.success(f"{saved} image(s) embedded and saved under class **{upload_class.strip()}**.")
+
+            st.rerun()

@@ -222,8 +222,8 @@ def _run_ingestion(job_id: str, folder_path: str, reset: bool, batch_size: int):
                     ids.append(id_)
                     metadatas.append({
                         "file_path"    : str(path),
-                        "filename"     : path.name,
-                        "folder_name"  : path.parent.name,
+                        "file_name"    : path.name,
+                        "class"        : path.parent.name,
                         "relative_path": str(path.relative_to(root)),
                     })
                 except (UnidentifiedImageError, Exception) as exc:
@@ -277,7 +277,7 @@ class StatsResponse(BaseModel):
 class MatchItem(BaseModel):
     id      : str              = Field(description="SHA1 ID derived from the image's relative path.")
     score   : float            = Field(example=0.921, description="Cosine similarity score in [-1, 1]. Higher = more similar.")
-    metadata: dict | None      = Field(default=None, description="Stored metadata: file_path, filename, folder_name, relative_path.")
+    metadata: dict | None      = Field(default=None, description="Stored metadata: file_path, file_name, class, relative_path.")
     values  : list[float] | None = Field(default=None, description="Raw 768-d embedding vector. Only present when include_values=true.")
 
 
@@ -438,8 +438,8 @@ async def search(
                                          description="Include stored metadata in the response."),
     filter_folder   : str | None = Query(default=None,
                                          description=(
-                                             "Restrict results to a specific folder name "
-                                             "(matches the 'folder_name' metadata field)."
+                                             "Restrict results to a specific class (folder name) "
+                                             "(matches the 'class' metadata field)."
                                          )),
 ):
     """
@@ -493,7 +493,7 @@ async def search(
             include=include,
         )
         if filter_folder:
-            query_kwargs["where"] = {"folder_name": filter_folder}
+            query_kwargs["where"] = {"class": filter_folder}
 
         results = col.query(**query_kwargs)
     except Exception as exc:
